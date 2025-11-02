@@ -1,0 +1,55 @@
+name: CD - Deploy to Hugging Face
+
+on:
+  workflow_dispatch: {}
+  push:
+    branches: ["main"]
+    paths:
+      - "app.py"
+      - "requirements.txt"
+      - "models/**"
+      - "train.py"
+      - "model_utils.py"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install git-lfs and dependencies
+        run: |
+          sudo apt-get update && sudo apt-get install -y git-lfs
+          git lfs install
+          python -m pip install --upgrade pip
+          pip install huggingface_hub
+      - name: Deploy to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_ID: ${{ secrets.HF_SPACE_ID }}
+        run: |
+          set -euo pipefail
+          
+          WORKDIR="${RUNNER_TEMP}/hf_space_sync"
+          mkdir -p "$WORKDIR"
+          echo "Working dir: $WORKDIR"
+          
+          # Clone the Hugging Face Space
+          git clone "https://user:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_ID}" "${WORKDIR}/space_repo"
+          
+          # Sync files from GitHub to Hugging Face
+          rsync -av --delete \
+            --exclude ".git" \
+            --exclude ".github" \
+            --exclude ".gitattributes" \
+            "${GITHUB_WORKSPACE}/" "${WORKDIR}/space_repo/"
+          
+          # Commit and push changes
+          cd "${WORKDIR}/space_repo"
+          git lfs install
+          git add -A
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -m "deploy: update spam detection model" || echo "No changes to commit"
+          git push origin HEAD

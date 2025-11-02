@@ -1,0 +1,36 @@
+name: Continuous Training - Spam Model
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 8 * * *"  # Daily at 8 AM
+  push:
+    branches: ["main"]
+    paths:
+      - "train.py"
+      - "model_utils.py"
+      - "spam.csv"
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Train spam detection model
+        run: python train.py
+      - name: Commit trained model
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(model): update spam detection model"
+          file_pattern: models/model-latest.pkl
